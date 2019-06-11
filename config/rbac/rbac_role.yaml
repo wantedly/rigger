@@ -5,9 +5,9 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - apps
+  - cores
   resources:
-  - deployments
+  - secrets
   verbs:
   - get
   - list
@@ -16,14 +16,6 @@ rules:
   - update
   - patch
   - delete
-- apiGroups:
-  - apps
-  resources:
-  - deployments/status
-  verbs:
-  - get
-  - update
-  - patch
 - apiGroups:
   - rigger.k8s.wantedly.com
   resources:
@@ -44,6 +36,18 @@ rules:
   - get
   - update
   - patch
+- apiGroups:
+  - cores
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
 - apiGroups:
   - admissionregistration.k8s.io
   resources:

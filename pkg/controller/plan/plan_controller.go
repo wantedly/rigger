@@ -2,18 +2,21 @@ package plan
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	riggerv1beta1 "github.com/wantedly/rigger/pkg/apis/rigger/v1beta1"
-	appsv1 "k8s.io/api/apps/v1"
+	"github.com/wantedly/rigger/pkg/clientset"
+	riggertypes "github.com/wantedly/rigger/pkg/types"
+	"github.com/wantedly/rigger/pkg/util"
+
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -21,12 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("controller")
-
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
+var log = logf.Log.WithName("plan-controller")
 
 // Add creates a new Plan Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -53,9 +51,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create
-	// Uncomment watch a Deployment created by Plan - change this for objects you create
-	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
+	// Watch for changes to Secret
+	err = c.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &riggerv1beta1.Plan{},
 	})
@@ -76,76 +73,114 @@ type ReconcilePlan struct {
 
 // Reconcile reads that state of the cluster for a Plan object and makes changes based on the state read
 // and what is in the Plan.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
-// a Deployment as an example
-// Automatically generate RBAC rules to allow the Controller to read and write Deployments
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
+// Automatically generate RBAC rules to allow the Controller to read and write Plans
 // +kubebuilder:rbac:groups=rigger.k8s.wantedly.com,resources=plans,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rigger.k8s.wantedly.com,resources=plans/status,verbs=get;update;patch
 func (r *ReconcilePlan) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the Plan instance
-	instance := &riggerv1beta1.Plan{}
-	err := r.Get(context.TODO(), request.NamespacedName, instance)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Object not found, return.  Created objects are automatically garbage collected.
-			// For additional cleanup logic use finalizers.
-			return reconcile.Result{}, nil
+	plan, planDeleted, err := util.ReconcilesFetchPlan(r, context.TODO(), request.NamespacedName)
+	// Plan Deleted
+	if planDeleted {
+		deletedPlan, found := Cache.Load(request.NamespacedName.Name)
+		if !found {
+			return reconcile.Result{}, fmt.Errorf("failed to delete secret collection of deleted plan because deleted plan name '%s' is not found in cache", request.NamespacedName.Name)
 		}
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
-	}
-
-	// TODO(user): Change this to be the object type created by your controller
-	// Define the desired Deployment object
-	deploy := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      instance.Name + "-deployment",
-			Namespace: instance.Namespace,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"deployment": instance.Name + "-deployment"},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"deployment": instance.Name + "-deployment"}},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "nginx",
-							Image: "nginx",
-						},
-					},
-				},
-			},
-		},
-	}
-	if err := controllerutil.SetControllerReference(instance, deploy, r.scheme); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// TODO(user): Change this for the object type created by your controller
-	// Check if the Deployment already exists
-	found := &appsv1.Deployment{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		log.Info("Creating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
-		err = r.Create(context.TODO(), deploy)
-		return reconcile.Result{}, err
-	} else if err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// TODO(user): Change this for the object type created by your controller
-	// Update the found object and write the result back if there are any changes
-	if !reflect.DeepEqual(deploy.Spec, found.Spec) {
-		found.Spec = deploy.Spec
-		log.Info("Updating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
-		err = r.Update(context.TODO(), found)
+		log.Info(fmt.Sprintf("plan deleted [namespace:%s,name:%s]", request.NamespacedName.Namespace, request.NamespacedName.Name))
+		Cache.Delete(request.NamespacedName.Name)
+		dstNamespace := deletedPlan.Spec.SyncDestNamespace
+		labelSelector := riggertypes.DstSecretLabelCreatedByRiggerKey + "=" + riggertypes.DstSecretLabelCreatedByRiggerValue
+		err := clientset.DeleteSecretCollection(dstNamespace, nil, metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
-			return reconcile.Result{}, err
+			return reconcile.Result{}, errors.Wrapf(err, "failed to delete secret collection of deleted plan [namespace:%s,selector:%s]", dstNamespace, labelSelector)
+		}
+		log.Info(fmt.Sprintf("succeeded to delete secret collection of deleted plan [namespace:%s,selector:%s]", dstNamespace, labelSelector))
+		return reconcile.Result{}, nil
+	} else if err != nil {
+		return reconcile.Result{}, errors.Wrapf(err, "failed to get plan %s", request.NamespacedName)
+	}
+
+	// Following is operation for Secrets.
+
+	// Update Plan cache to avoid running Reconcile loops with old settings.
+	Cache.Store(plan.Name, plan)
+
+	newSyncTargetSecretName := plan.Spec.SyncTargetSecretName
+	newSyncDestNamespace := plan.Spec.SyncDestNamespace
+	newIgnoreNamespaces := plan.Spec.IgnoreNamespaces
+
+	// Plan Cretated
+	if len(plan.Status.LastSyncTargetSecretName)+len(plan.Status.LastSyncDestNamespace)+len(plan.Status.LastIgnoreNamespaces) == 0 {
+		log.Info(fmt.Sprintf("plan created [namespace:%s,name:%s]", plan.Namespace, plan.Name))
+		if err := SyncAllNamespaceSecrets(newSyncTargetSecretName, newSyncDestNamespace, newIgnoreNamespaces); err != nil {
+			return reconcile.Result{}, errors.Wrapf(err, "failed to sync all namespace secrets to [destnamespace:%s,targetname:%s]", newSyncTargetSecretName, newSyncDestNamespace)
+		}
+		log.Info(fmt.Sprintf("succeeded to sync all namespace secrets to [destnamespace:%s,targetname:%s]", newSyncTargetSecretName, newSyncDestNamespace))
+		plan.Status.LastSyncTargetSecretName = newSyncTargetSecretName
+		plan.Status.LastSyncDestNamespace = newSyncDestNamespace
+		plan.Status.LastIgnoreNamespaces = newIgnoreNamespaces
+		if err := util.ReconcilesUpdatePlan(r, context.TODO(), plan); err != nil {
+			return reconcile.Result{}, errors.Wrapf(err, "failed to update plan status [namespace:%s,name:%s]", plan.Namespace, plan.Name)
+		}
+		Cache.Store(plan.Name, plan)
+		log.Info(fmt.Sprintf("succeeded to update plan status [namespace:%s,name:%s]", plan.Namespace, plan.Name))
+		return reconcile.Result{}, nil
+	}
+
+	// Plan Updated
+	SyncTargetSecretNameUpdated := plan.Status.LastSyncTargetSecretName != newSyncTargetSecretName
+	SyncDestNamespaceUpdated := plan.Status.LastSyncDestNamespace != newSyncDestNamespace
+	IgnoreNamespacesUpdated := !reflect.DeepEqual(plan.Status.LastIgnoreNamespaces, newIgnoreNamespaces)
+	if !(SyncTargetSecretNameUpdated || SyncDestNamespaceUpdated || IgnoreNamespacesUpdated) {
+		return reconcile.Result{}, nil
+	}
+	log.Info(fmt.Sprintf("plan updated [namespace:%s,name:%s]", plan.Namespace, plan.Name))
+	if SyncTargetSecretNameUpdated {
+		// Update SyncTargetSecretName
+		// TODO(unblee): Sync new SyncTargetSecretName secrets of all namespaces to SyncDestNamespace
+		//               && Delete old SyncTargetSecretName secrets of all namespaces from SyncDestNamespace
+		plan.Status.LastSyncTargetSecretName = newSyncTargetSecretName
+	}
+	if SyncDestNamespaceUpdated {
+		// Update SyncDestNamespace
+		// TODO(unblee): Sync SyncTargetSecretName secrets of all namespaces to new SyncDestNamespace
+		//               && Delete SyncTargetSecretName secrets of all namespaces from old SyncDestNamespace
+		plan.Status.LastSyncDestNamespace = newSyncDestNamespace
+	}
+	if IgnoreNamespacesUpdated {
+		// Update IgnoreNamespaces
+		// TODO(unblee):
+		//   added ignore namespaces: Delete SyncTargetSecretName secrets of namespace added to IgnoreNamespaces
+		//   deleted ignore namespaces: Sync SyncTargetSecretName secrets of namespaces deleted from IgnoreNamespaces
+		plan.Status.LastIgnoreNamespaces = newIgnoreNamespaces
+	}
+	if err := util.ReconcilesUpdatePlan(r, context.TODO(), plan); err != nil {
+		return reconcile.Result{}, errors.Wrapf(err, "failed to update plan status [namespace:%s,name:%s]", plan.Namespace, plan.Name)
+	}
+	Cache.Store(plan.Name, plan)
+	log.Info(fmt.Sprintf("succeeded to update plan status [namespace:%s,name:%s]", plan.Namespace, plan.Name))
+	return reconcile.Result{}, nil
+}
+
+func SyncAllNamespaceSecrets(targetSecretName, destNamespace string, ignoreNamespaces []string) error {
+	allNamespaceSecrets, err := clientset.GetAllNamespaceSecrets()
+	if err != nil {
+		return errors.Wrap(err, "failed to get secrets of all namespace")
+	}
+	for _, srcSecret := range allNamespaceSecrets {
+		if srcSecret.Name != targetSecretName || util.Contains(srcSecret.Namespace, ignoreNamespaces) {
+			continue
+		}
+		dstSecret := riggertypes.NewDstSecret(destNamespace, riggertypes.NewDstSecretName(srcSecret.Namespace, srcSecret.Name), &srcSecret)
+		_, err := clientset.CreateSecret(dstSecret.Namespace, dstSecret)
+		if apierrors.IsAlreadyExists(err) {
+			// Overwrite the existing Secret.
+			_, _ = clientset.UpdateSecret(dstSecret.Namespace, dstSecret)
+			log.Info(fmt.Sprintf("succeeded to update secret [namespace:%s,name:%s]", dstSecret.Namespace, dstSecret.Name))
+		} else if err != nil {
+			return errors.Wrapf(err, "failed to create secret [namespace:%s,name:%s]", dstSecret.Namespace, dstSecret.Name)
+		} else {
+			log.Info(fmt.Sprintf("succeeded to create secret [namespace:%s,name:%s]", dstSecret.Namespace, dstSecret.Name))
 		}
 	}
-	return reconcile.Result{}, nil
+	return nil
 }

@@ -27,8 +27,29 @@ spec:
         metadata:
           type: object
         spec:
+          properties:
+            ignoreNamespaces:
+              description: Do not sync from specified Namespaces.
+              items:
+                type: string
+              type: array
+            syncDestNamespace:
+              description: The namespace to register synced secrets.
+              type: string
+            syncTargetSecretName:
+              description: Secret name of the target to sync.
+              type: string
           type: object
         status:
+          properties:
+            lastIgnoreNamespaces:
+              items:
+                type: string
+              type: array
+            lastSyncDestNamespace:
+              type: string
+            lastSyncTargetSecretName:
+              type: string
           type: object
   version: v1beta1
 status:

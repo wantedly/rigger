@@ -11,12 +11,25 @@ import (
 type PlanSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Secret name of the target to sync.
+	SyncTargetSecretName string `json:"syncTargetSecretName,omitempty"`
+
+	// The namespace to register synced secrets.
+	SyncDestNamespace string `json:"syncDestNamespace,omitempty"`
+
+	// Do not sync from specified Namespaces.
+	IgnoreNamespaces []string `json:"ignoreNamespaces,omitempty"`
 }
 
 // PlanStatus defines the observed state of Plan
 type PlanStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	LastSyncTargetSecretName string   `json:"lastSyncTargetSecretName,omitempty"`
+	LastSyncDestNamespace    string   `json:"lastSyncDestNamespace,omitempty"`
+	LastIgnoreNamespaces     []string `json:"lastIgnoreNamespaces,omitempty"`
 }
 
 // +genclient
