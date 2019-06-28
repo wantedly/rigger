@@ -24,6 +24,7 @@ before_install:
 
 install:
   - dep ensure -v
+  - scripts/install_kubebuilder
 
 script:
   - make test
