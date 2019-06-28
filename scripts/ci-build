@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -eu
+set -o pipefail
+
+cd "$(dirname $0)/.."
+
+echo "docker build -t ${REPO}:${TAG}"
+docker build -t $REPO:$TAG .

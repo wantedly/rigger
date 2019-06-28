@@ -1,0 +1,35 @@
+language: go
+
+go:
+  - "1.10.3"
+
+services:
+  - docker
+
+env:
+  global:
+    - REPO=quay.io/wantedly/rigger
+    - BRANCH=$(echo $TRAVIS_BRANCH | sed -e 's/[^a-zA-Z0-9]/_/g')
+    - TAG=$BRANCH-${TRAVIS_COMMIT::8}
+
+cache:
+  directories:
+    - vendor
+    - $GOPATH/pkg/dep
+
+before_install:
+  - go get -u -v github.com/golang/dep/cmd/dep
+
+install:
+  - dep ensure -v
+
+script:
+  - make test
+  - scripts/ci-build
+
+deploy:
+  skip_cleanup: true
+  provider: script
+  script: scripts/ci-deploy
+  on:
+    branch: master
