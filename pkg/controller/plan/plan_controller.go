@@ -137,20 +137,20 @@ func (r *ReconcilePlan) Reconcile(request reconcile.Request) (reconcile.Result, 
 	if SyncTargetSecretNameUpdated {
 		// Update SyncTargetSecretName
 		// TODO(unblee): Sync new SyncTargetSecretName secrets of all namespaces to SyncDestNamespace
-		//               && Delete old SyncTargetSecretName secrets of all namespaces from SyncDestNamespace
+		//               && Delete all old SyncTargetSecretName secrets from SyncDestNamespace
 		plan.Status.LastSyncTargetSecretName = newSyncTargetSecretName
 	}
 	if SyncDestNamespaceUpdated {
 		// Update SyncDestNamespace
 		// TODO(unblee): Sync SyncTargetSecretName secrets of all namespaces to new SyncDestNamespace
-		//               && Delete SyncTargetSecretName secrets of all namespaces from old SyncDestNamespace
+		//               && Delete all SyncTargetSecretName secrets from old SyncDestNamespace
 		plan.Status.LastSyncDestNamespace = newSyncDestNamespace
 	}
 	if IgnoreNamespacesUpdated {
 		// Update IgnoreNamespaces
 		// TODO(unblee):
-		//   added ignore namespaces: Delete SyncTargetSecretName secrets of namespace added to IgnoreNamespaces
-		//   deleted ignore namespaces: Sync SyncTargetSecretName secrets of namespaces deleted from IgnoreNamespaces
+		//   added ignore namespaces: Delete all SyncTargetSecretName secrets from added IgnoreNamespaces namespace
+		//   deleted ignore namespaces: Sync SyncTargetSecretName secrets of all namespaces to deleted IgnoreNamespaces namespaces
 		plan.Status.LastIgnoreNamespaces = newIgnoreNamespaces
 	}
 	if err := util.ReconcilesUpdatePlan(r, context.TODO(), plan); err != nil {
