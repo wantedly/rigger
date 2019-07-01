@@ -76,7 +76,7 @@ type ReconcilePlan struct {
 // Automatically generate RBAC rules to allow the Controller to read and write Plans and Namespaces
 // +kubebuilder:rbac:groups=rigger.k8s.wantedly.com,resources=plans,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rigger.k8s.wantedly.com,resources=plans/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=rigger.k8s.wantedly.com,resources=namespaces,verbs=get;list
+// +kubebuilder:rbac:groups=cores,resources=namespaces,verbs=get;list
 func (r *ReconcilePlan) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the Plan instance
 	plan, planDeleted, err := util.ReconcilesFetchPlan(r, context.TODO(), request.NamespacedName)

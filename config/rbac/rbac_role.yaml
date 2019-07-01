@@ -37,7 +37,7 @@ rules:
   - update
   - patch
 - apiGroups:
-  - rigger.k8s.wantedly.com
+  - cores
   resources:
   - namespaces
   verbs:
