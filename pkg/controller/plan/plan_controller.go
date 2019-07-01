@@ -73,9 +73,10 @@ type ReconcilePlan struct {
 
 // Reconcile reads that state of the cluster for a Plan object and makes changes based on the state read
 // and what is in the Plan.Spec
-// Automatically generate RBAC rules to allow the Controller to read and write Plans
+// Automatically generate RBAC rules to allow the Controller to read and write Plans and Namespaces
 // +kubebuilder:rbac:groups=rigger.k8s.wantedly.com,resources=plans,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rigger.k8s.wantedly.com,resources=plans/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=rigger.k8s.wantedly.com,resources=namespaces,verbs=get;list
 func (r *ReconcilePlan) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the Plan instance
 	plan, planDeleted, err := util.ReconcilesFetchPlan(r, context.TODO(), request.NamespacedName)
