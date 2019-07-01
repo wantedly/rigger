@@ -23,7 +23,8 @@ install: manifests
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
 	kubectl apply -f config/crds
-	kustomize build config/default | kubectl apply -f -
+	# ref. https://github.com/kubernetes-sigs/kustomize/blob/a32d5ce7aba79f470d13215efab80c0dc8bbf4d7/docs/FAQ.md#security-file-foo-is-not-in-or-below-bar
+	kustomize build --load_restrictor none config/default | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests:
